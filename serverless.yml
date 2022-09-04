@@ -1,0 +1,108 @@
+service: customers-service
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  region: sa-east-1
+  stage: beta
+  runtime: nodejs16.x
+  iam:
+    role:
+      statements:
+      - Effect: Allow
+        Action:
+          - "dynamodb:PutItem"
+          - "dynamodb:GetItem"
+          - "dynamodb:DeleteItem"
+          - "dynamodb:Scan" 
+          - "dynamodb:ListStreams"
+        Resource:
+          - arn:aws:dynamodb:sa-east-1:434546467912:table/CustomersInfo-beta
+          - arn:aws:dynamodb:sa-east-1:434546467912:table/CustomersInfo-beta/index/*
+  environment:
+    CUSTOMERS_TABLE: 'CustomersInfo-beta'
+
+functions:
+  indexer:
+    handler: src/utils/indexer.handler
+    environment:
+      ALGOLIA_APP_ID: ${ssm:application-id}
+      ALGOLIA_ADMIN_API_KEY: ${ssm:algolia-admin-api-key}
+    events: 
+      - stream:
+         type: dynamodb
+         arn:
+          Fn::GetAtt: [CustomersInfo, StreamArn]
+  createCustomer:
+    handler: src/handlers/createCustomer.handler
+    events:
+      - http:
+          path: customers/create
+          method: post
+          authorizer: 
+            type: aws_iam
+  getCustomer:
+    handler: src/handlers/getCustomer.handler
+    events:
+      - http:
+          path: customers/get/{id}
+          method: get
+          authorizer: 
+            type: aws_iam
+  updateCustomer:
+    handler: src/handlers/updateCustomer.handler
+    events:
+      - http:
+          path: customers/update/{id}
+          method: put
+          authorizer: 
+            type: aws_iam
+  deleteCustomer:
+    handler: src/handlers/deleteCustomer.handler
+    events:
+      - http:
+          path: customers/delete/{id}
+          method: delete
+          authorizer: 
+            type: aws_iam
+  listCustomers:
+    handler: src/handlers/listCustomers.handler
+    events:
+      - http:
+          path: customers/list
+          method: get
+          authorizer: 
+            type: aws_iam
+  freeTextSearch:
+    handler: src/handlers/freeTextSearchCustomer.handler
+    environment:
+      ALGOLIA_APP_ID: ${ssm:application-id}
+      ALGOLIA_ADMIN_API_KEY: ${ssm:algolia-admin-api-key}
+    events:
+      - http:
+          path: customers/search
+          method: get
+          authorizer: 
+            type: aws_iam
+
+plugins:
+  - serverless-plugin-typescript
+
+resources:
+  Resources:
+    CustomersInfo:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: CustomersInfo-beta
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+  

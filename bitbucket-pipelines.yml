@@ -1,0 +1,27 @@
+image: node:16
+
+definitions:
+  steps:
+    - step: &buildAndTest
+        name: Build And Test Project
+        caches:
+          - node
+        script:
+          - npm install
+          - npm install -g serverless
+          - serverless config credentials --provider aws --key $AWS_ACCESS_KEY --secret $AWS_SECRET_ACCESS_KEY
+          - npm test --findRelatedTests ./tests
+    - step: &deploy
+        name: Deploy Project 
+        caches:
+          - node
+        script:
+          - npm install -g serverless
+          - serverless config credentials --provider aws --key $AWS_ACCESS_KEY --secret $AWS_SECRET_ACCESS_KEY
+          - serverless deploy --stage beta 
+
+pipelines:
+  branches:
+    master:
+      - step: *buildAndTest
+      - step: *deploy
